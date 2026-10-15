@@ -1,0 +1,27 @@
+# Reproducible CAD exports, reports, logs and release archives
+/build/
+/dist/
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Future firmware toolchain output
+.pio/
+cmake-build-*/
+
+# Local configuration and editor/OS files
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+*.log
+*.swp
+*~
