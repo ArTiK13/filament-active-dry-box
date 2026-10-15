@@ -40,6 +40,7 @@ CAD-исходников; изображения в `docs/images/` хранят�
 - [Требования, размеры, оси и режимы работы](docs/DESIGN_BRIEF.md)
 - [Печать, покупки, изготовление прокладок и сборка](docs/ASSEMBLY.md)
 - [CAD: параметры, окружение, команды и результаты](cad/README.md)
+- [Две отдельные версии фиксации заслонок: пружина и магниты](docs/VALVE_VARIANTS.md)
 - [Открытые решения: фиксация заслонок и дальнейшие испытания](docs/DESIGN_DECISIONS.md)
 - [Ветки, коммиты и порядок работы](docs/DEVELOPMENT.md)
 - [Электроника](electronics/README.md) · [Прошивка](firmware/README.md)
@@ -72,3 +73,12 @@ make build PYTHON=/Users/xartik/3d_models/.venv/bin/python
 разработку. Отдельные задачи выполняются в короткоживущих ветках `cad/...`,
 `electronics/...`, `firmware/...` или `docs/...` от `develop`.
 Наличие версии в `main` само по себе не означает, что прототип испытан физически.
+
+## Варианты заслонок
+
+![Пружинная и магнитная версии](docs/images/variants/comparison.png)
+
+`make variants` собирает обе альтернативы в `build/cad-variants/spring/` и
+`build/cad-variants/magnetic/`. Базовая v1 собирается прежним `make build`.
+Ни одна альтернатива пока не выбрана основной; обе требуют испытания одного узла.
+Подробности, закупки и сборка — в [описании вариантов](docs/VALVE_VARIANTS.md).

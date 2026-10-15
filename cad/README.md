@@ -104,3 +104,12 @@ make package PYTHON=/Users/xartik/3d_models/.venv/bin/python
 `/Users/xartik/Downloads/IMG_3268.HEIC`,
 `/Users/xartik/Downloads/IMG_3267 2.HEIC` (без разметки),
 `/Users/xartik/Downloads/IMG_3267.heic` (со схемой).
+
+## Альтернативы механизма заслонок
+
+`drybox_cad/retention.py` содержит две независимые версии и общий соосный привод
+со свободным ходом. Настройки — `variants/spring.json` и `variants/magnetic.json`.
+`build_variants.py` проверяет и экспортирует обе версии отдельно от базовой v1.
+Команды: `make variants`, `variants-geometry`, `variants-render`, `variants-package`
+с тем же `PYTHON=...`. Техническое описание — в
+[VALVE_VARIANTS.md](../docs/VALVE_VARIANTS.md).

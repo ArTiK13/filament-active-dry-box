@@ -1,0 +1,9 @@
+{
+  "kind": "magnetic",
+  "parameters": {
+    "magnet_diameter": 6,
+    "magnet_thickness": 3,
+    "magnet_gap": 1.5,
+    "assumed_force_per_magnet_n": 1.8
+  }
+}

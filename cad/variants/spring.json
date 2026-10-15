@@ -1,0 +1,12 @@
+{
+  "kind": "spring",
+  "parameters": {
+    "spring_radius": 10,
+    "spring_anchor_radius": 35,
+    "spring_dead_angle": 25,
+    "spring_free_eye_length": 32,
+    "spring_initial_force_n": 1.5,
+    "spring_rate_n_per_mm": 1.1,
+    "spring_outer_diameter": 4
+  }
+}
