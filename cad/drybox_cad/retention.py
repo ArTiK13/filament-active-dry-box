@@ -33,7 +33,12 @@ class RetentionParameters:
     magnet_thickness: float = 3.0
     magnet_gap: float = 1.5
     assumed_force_per_magnet_n: float = 1.8
-    edge_magnet_gap: float = 3.0
+    edge_magnet_diameter: float = 5.0
+    edge_pocket_diameter: float = 5.3
+    edge_membrane: float = 0.4
+    edge_stack_capacity: float = 4.0
+    edge_stack_height: float = 2.0
+    edge_open_clearance: float = 0.8
     assumed_edge_pair_force_n: float = 0.35
     polymer_density_g_cm3: float = 1.4
 
@@ -63,8 +68,14 @@ class RetentionParameters:
             raise ValueError('magnet cartridges use 6x3 mm discs')
         if not 1.2 <= self.magnet_gap <= 3:
             raise ValueError('magnet_gap supported range 1.2..3 mm')
-        if not 2.8 <= self.edge_magnet_gap <= 3.6:
-            raise ValueError('edge_magnet_gap supported range 2.8..3.6 mm')
+        if self.edge_magnet_diameter != 5 or not 5.2 <= self.edge_pocket_diameter <= 5.4:
+            raise ValueError('edge magnets require 5 mm discs and 5.2..5.4 mm pockets')
+        if not .2 <= self.edge_membrane <= .4:
+            raise ValueError('edge_membrane supported range 0.2..0.4 mm')
+        if self.edge_stack_capacity != 4 or not 1 <= self.edge_stack_height <= self.edge_stack_capacity:
+            raise ValueError('edge stack height must be 1..4 mm within a 4 mm pocket')
+        if not .8 <= self.edge_open_clearance <= 1.2:
+            raise ValueError('edge_open_clearance supported range 0.8..1.2 mm')
 
 
 def radial_point(radius, phi):
@@ -318,19 +329,19 @@ def variant_assembly(p, q, kind, mode='dry'):
         role = 'bin' if n == 120 else ('heater' if prefix == 'heater_valve_' else 'exhaust')
         valve = retention_valve(n, p, kind, q, role)
         for key, (shape, part_kind, material, color) in valve.components(angle).items():
+            if key.startswith(f'edge_open_{role}_integral_'):
+                continue
             name = prefix + key
             parts[name] = Part(name, place(shape), part_kind, material, color, f'valve{n}_{key}')
-        if kind == 'magnetic' and role != 'exhaust':
+        if role != 'exhaust':
             housing = ('leg_lid_left' if 'left' in prefix else 'leg_lid_right') if role == 'bin' else 'heater_hood'
             item = parts[housing]
-            holes = [place(h) for h in valve.body_mount_holes()]
-            parts[housing] = Part(item.name, cut(item.shape, holes), item.kind,
+            supports = [place(valve.open_support(x)) for x in valve.edge_xs]
+            parts[housing] = Part(item.name, fuse(item.shape, supports), item.kind,
                                   item.material, item.color, item.design, item.orientation)
     return parts
 
 
 def retention_valve(n, p, kind, q, role=None):
-    if kind == 'magnetic':
-        from .edge_magnets import EdgeMagneticValve
-        return EdgeMagneticValve(n, p, kind, q, role)
-    return RetainedValve(n, p, kind, q)
+    from .edge_magnets import EdgeMagneticValve
+    return EdgeMagneticValve(n, p, kind, q, role)

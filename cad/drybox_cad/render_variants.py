@@ -60,8 +60,8 @@ def render_variant(p, q, kind, out):
     finish(v, out / name, (valve.d + 240, valve.hy - 150, valve.hz + 100),
            (valve.d + 45, valve.hy, valve.hz + 16), None)
     names.append(name)
-    if kind == 'magnetic':
-        v = setup('MAGNETIC | storage mode: all five free-edge catches engaged | housings translucent')
+    if kind in ('spring', 'magnetic'):
+        v = setup(f'{kind.upper()} | storage mode: all five free-edge catches engaged | housings translucent')
         for key, item in variant_assembly(p, q, kind, 'dry').items():
             translucent = key.startswith(('leg_', 'bridge_')) or key in ('heater_hood', 'heater_hood_lid')
             draw(v, item, opacity=.12 if translucent else 1)
@@ -69,7 +69,7 @@ def render_variant(p, q, kind, out):
         finish(v, out / name, (740, -700, 770), (0, 180, 125), None)
         names.append(name)
 
-        v = setup('MAGNETIC | direct free-edge catches | 120 mm closed / open; seat translucent')
+        v = setup(f'{kind.upper()} | direct free-edge catches | 120 mm closed / open; seat translucent')
         for index, angle in enumerate((0, p.open_angle)):
             for key, (s, t, m, c) in valve.components(angle).items():
                 if key not in ('frame', 'flap', 'flap_seal') and not key.startswith('edge_'):
@@ -80,7 +80,7 @@ def render_variant(p, q, kind, out):
         finish(v, out / name, (520, -600, 440), (115, 0, 65), None)
         names.append(name)
 
-        v = setup('MAGNETIC | closed free-edge pair | geometry cutaway; polymer translucent')
+        v = setup(f'{kind.upper()} | closed pair | 5 mm stacks, 0.4 mm integral membranes | cutaway')
         x = valve.edge_xs[1]
         window = box(24, 23, 22, (x - 12, valve.edge_y - 10, -1))
         for key, (s, t, m, c) in valve.components(0).items():
@@ -94,7 +94,7 @@ def render_variant(p, q, kind, out):
         finish(v, out / name, (x + 45, valve.edge_y - 65, 42), (x, valve.edge_y, 9), None)
         names.append(name)
 
-        v = setup('MAGNETIC | 80 mm exhaust: CLOSED / OPEN | direct catch only when closed')
+        v = setup(f'{kind.upper()} | 80 mm exhaust: CLOSED / OPEN | direct catch only when closed')
         for index, angle in enumerate((0, p.open_angle)):
             exhaust = retention_valve(80, p, kind, q, 'exhaust')
             for key, (s, t, m, c) in exhaust.components(angle).items():
@@ -102,4 +102,24 @@ def render_variant(p, q, kind, out):
         name = 'exhaust_states.png'
         finish(v, out / name, (660, -500, 380), (145, 15, 45), None)
         names.append(name)
+    v = setup(f'{kind.upper()} | integral glue pockets | 5 mm discs, 4 mm capacity, 0.4 mm floor')
+    valve = retention_valve(80, p, kind, q, 'exhaust')
+    draw(v, Part('flap', valve.door(), 'print', '', '#DBA34A', ''))
+    # Keep pockets empty here so the integral rims and loading direction are visible.
+    from .edge_magnets import magnet_coupon
+    draw(v, Part('coupon', magnet_coupon(q).translate((-18, -85, 10)), 'print', '', '#538D88', ''))
+    name = 'glue_pockets.png'
+    finish(v, out / name, (125, -205, 200), (0, -15, 15), None)
+    names.append(name)
+
+    v = setup(f'{kind.upper()} | open catches integral with removable channel lid | no mounting screws')
+    assembly = variant_assembly(p, q, kind, 'dry')
+    draw(v, assembly['leg_lid_left'])
+    for key, item in assembly.items():
+        if key.startswith('box_valve_left_edge_open_magnet_'):
+            draw(v, item)
+    name = 'integral_lid.png'
+    finish(v, out / name, (-p.leg_spacing / 2 + 230, -150, -80),
+           (-p.leg_spacing / 2, 135, p.centre_z + 40), None)
+    names.append(name)
     return names

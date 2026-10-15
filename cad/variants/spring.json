@@ -7,6 +7,12 @@
     "spring_free_eye_length": 32,
     "spring_initial_force_n": 1.5,
     "spring_rate_n_per_mm": 1.1,
-    "spring_outer_diameter": 4
+    "spring_outer_diameter": 4,
+    "edge_magnet_diameter": 5,
+    "edge_pocket_diameter": 5.3,
+    "edge_membrane": 0.4,
+    "edge_stack_capacity": 4,
+    "edge_stack_height": 2,
+    "edge_open_clearance": 0.8
   }
 }

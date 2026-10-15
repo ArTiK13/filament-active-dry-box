@@ -5,7 +5,12 @@
     "magnet_thickness": 3,
     "magnet_gap": 1.5,
     "assumed_force_per_magnet_n": 1.8,
-    "edge_magnet_gap": 3.0,
-    "assumed_edge_pair_force_n": 0.35
+    "assumed_edge_pair_force_n": 0.35,
+    "edge_magnet_diameter": 5,
+    "edge_pocket_diameter": 5.3,
+    "edge_membrane": 0.4,
+    "edge_stack_capacity": 4,
+    "edge_stack_height": 2,
+    "edge_open_clearance": 0.8
   }
 }
