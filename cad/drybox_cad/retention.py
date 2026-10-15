@@ -33,6 +33,8 @@ class RetentionParameters:
     magnet_thickness: float = 3.0
     magnet_gap: float = 1.5
     assumed_force_per_magnet_n: float = 1.8
+    edge_magnet_gap: float = 3.0
+    assumed_edge_pair_force_n: float = 0.35
     polymer_density_g_cm3: float = 1.4
 
     def validate(self, p):
@@ -61,6 +63,8 @@ class RetentionParameters:
             raise ValueError('magnet cartridges use 6x3 mm discs')
         if not 1.2 <= self.magnet_gap <= 3:
             raise ValueError('magnet_gap supported range 1.2..3 mm')
+        if not 2.8 <= self.edge_magnet_gap <= 3.6:
+            raise ValueError('edge_magnet_gap supported range 2.8..3.6 mm')
 
 
 def radial_point(radius, phi):
@@ -311,7 +315,22 @@ def variant_assembly(p, q, kind, mode='dry'):
             if name.startswith(prefix):
                 del parts[name]
         angle = p.open_angle if (mode == 'dry' and n == 120) or (mode == 'regenerate' and n == 80) else 0
-        for key, (shape, part_kind, material, color) in RetainedValve(n, p, kind, q).components(angle).items():
+        role = 'bin' if n == 120 else ('heater' if prefix == 'heater_valve_' else 'exhaust')
+        valve = retention_valve(n, p, kind, q, role)
+        for key, (shape, part_kind, material, color) in valve.components(angle).items():
             name = prefix + key
             parts[name] = Part(name, place(shape), part_kind, material, color, f'valve{n}_{key}')
+        if kind == 'magnetic' and role != 'exhaust':
+            housing = ('leg_lid_left' if 'left' in prefix else 'leg_lid_right') if role == 'bin' else 'heater_hood'
+            item = parts[housing]
+            holes = [place(h) for h in valve.body_mount_holes()]
+            parts[housing] = Part(item.name, cut(item.shape, holes), item.kind,
+                                  item.material, item.color, item.design, item.orientation)
     return parts
+
+
+def retention_valve(n, p, kind, q, role=None):
+    if kind == 'magnetic':
+        from .edge_magnets import EdgeMagneticValve
+        return EdgeMagneticValve(n, p, kind, q, role)
+    return RetainedValve(n, p, kind, q)

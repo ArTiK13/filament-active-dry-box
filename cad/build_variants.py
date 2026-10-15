@@ -20,7 +20,7 @@ import build as baseline
 from drybox_cad.parameters import Parameters
 from drybox_cad.project import REPO_ROOT, PARAMETERS_FILE, source_hashes
 from drybox_cad.model import Part, Valve, rotate_x, reference_bin, valve_to_leg, valve_to_outlet, valve_to_heater
-from drybox_cad.retention import RetentionParameters, RetainedValve, variant_assembly
+from drybox_cad.retention import RetentionParameters, retention_valve, variant_assembly
 
 ROOT = REPO_ROOT / 'build' / 'cad-variants'
 
@@ -84,10 +84,12 @@ def mechanics(v):
     moving = ['flap', 'latch_rotor', 'drive_pin']
     if v.kind == 'magnetic':
         moving += ['steel_keeper', 'keeper_cap']
+        moving += [name for name in parts if name.startswith(('edge_flap_cap_', 'edge_flap_magnet_'))]
     masses = []
     for name in moving:
         item = parts[name]
-        rho = 7.85 if name in ('steel_keeper', 'drive_pin') else density
+        rho = (7.5 if name.startswith('edge_flap_magnet_') else
+               7.85 if name in ('steel_keeper', 'drive_pin') else density)
         masses.append((item.shape.Volume() * rho / 1e6, np.array(item.shape.Center().toTuple())))
     mass = sum(m for m, _ in masses)
     centre = sum(m * c for m, c in masses) / mass - np.array(v.pivot)
@@ -127,10 +129,18 @@ def mechanics(v):
                          'force_range_n': [min(r['spring_force_n'] for r in rows), max(r['spring_force_n'] for r in rows)]})
         else:
             assumed = 2 * q.assumed_force_per_magnet_n * q.magnet_radius
+            edge = 2 * q.assumed_edge_pair_force_n * v.edge_lever
+            has_open = label != 'exhaust'
             item.update({'force_assumption_per_magnet_n_NOT_VENDOR_SPEC': q.assumed_force_per_magnet_n,
                          'nominal_attraction_moment_n_mm': assumed,
+                         'edge_pair_force_assumption_n_NOT_VENDOR_SPEC': q.assumed_edge_pair_force_n,
+                         'edge_lever_mm': v.edge_lever,
+                         'closed_edge_moment_n_mm': edge,
+                         'open_edge_moment_n_mm': edge if has_open else 0,
+                         'closed_combined_attraction_n_mm': assumed + edge,
+                         'open_combined_attraction_n_mm': assumed + (edge if has_open else 0),
                          'minimum_total_open_catch_force_n_under_gravity_only': max(0, -rows[-1]['gravity_n_mm']) / q.magnet_radius,
-                         'conservative_release_torque_nm_without_seal_friction': (assumed + item['gravity_peak_n_mm']) / 1000,
+                         'conservative_release_torque_nm_without_seal_friction': (assumed + edge + item['gravity_peak_n_mm']) / 1000,
                          'actual_magnet_force_and_capture_range': 'must measure at actual gap; no field simulation performed'})
         data['orientations'][label] = item
     return data
@@ -160,18 +170,53 @@ def check_valve(v):
         t0, l0, _ = v.spring_torque(v.q.spring_dead_angle)
         assert abs(t0) < 1e-9
         assert l0 > v.spring_torque(0)[1] and l0 > v.spring_torque(v.p.open_angle)[1]
+    edge_checks = edge_catch_checks(v) if v.kind == 'magnetic' else None
     return {'angles_deg': angles, 'print_and_hardware_clearance': True,
             'hardware_pairs_checked': count, 'hard_stop_contacts': True,
             'parked_servo_unloaded_pin_clearance_gt_mm': .1,
             'lost_motion_extremes_tested_deg': [-v.engagement_angle, v.engagement_angle],
-            'mechanics': mechanics(v)}
+            'edge_catches': edge_checks, 'mechanics': mechanics(v)}
+
+
+def edge_catch_checks(v):
+    for label in ('left', 'right'):
+        for opened in (False, True):
+            ps = local_parts(v, v.p.open_angle if opened else 0)
+            fixed = f'edge_{"open" if opened else "closed"}_magnet_{label}'
+            if opened and v.role == 'exhaust':
+                assert fixed not in ps
+                continue
+            moving = ps[f'edge_flap_magnet_{label}'].shape
+            assert abs(moving.distance(ps[fixed].shape) - v.q.edge_magnet_gap) < 1e-6
+        if v.role != 'exhaust':
+            bracket = local_parts(v, 0)[f'edge_open_{v.role}_bracket_{label}'].shape
+            assert abs(bracket.BoundingBox().ymax - v.body_y) < 1e-6
+    return {'role': v.role, 'moving_discs': 2, 'closed_pairs': 2,
+            'open_pairs': 0 if v.role == 'exhaust' else 2,
+            'face_gap_mm': v.q.edge_magnet_gap, 'matching_faces_and_wall_datum': True}
+
+
+def engaged_edge_pairs(parts, q, state):
+    count = 0
+    for prefix in ('box_valve_left_', 'box_valve_right_', 'heater_valve_', 'exhaust_left_', 'exhaust_right_'):
+        opened = (prefix.startswith('box_') and state == 'dry') or (not prefix.startswith('box_') and state == 'regenerate')
+        for side in ('left', 'right'):
+            key = prefix + f'edge_{"open" if opened else "closed"}_magnet_{side}'
+            if key not in parts:
+                assert prefix.startswith('exhaust_') and opened
+                continue
+            moving = parts[prefix + f'edge_flap_magnet_{side}'].shape
+            assert abs(moving.distance(parts[key].shape) - q.edge_magnet_gap) < 1e-6
+            count += 1
+    assert count == (6 if state == 'regenerate' else 10)
+    return count
 
 
 def integration_sweep(p, q, kind):
     # All five placements are checked against every non-valve component, including the reference bin.
     base = variant_assembly(p, q, kind, 'cooling')
     prefixes = ('box_valve_left_', 'box_valve_right_', 'exhaust_left_', 'exhaust_right_', 'heater_valve_')
-    housing = {n: x for n, x in base.items() if not n.startswith(prefixes) and x.kind == 'print'}
+    housing = {n: x for n, x in base.items() if not n.startswith(prefixes) and x.kind != 'seal'}
     housing['reference_bin'] = Part('reference_bin', reference_bin(p), 'print', '', '', '')
     placements = [
         (120, lambda s: valve_to_leg(s, -p.leg_spacing / 2, p)),
@@ -181,7 +226,8 @@ def integration_sweep(p, q, kind):
         (80, lambda s: valve_to_heater(s, p)),
     ]
     for index, (n, place) in enumerate(placements):
-        v = RetainedValve(n, p, kind, q)
+        role = 'bin' if n == 120 else ('heater' if index == 4 else 'exhaust')
+        v = retention_valve(n, p, kind, q, role)
         for angle in (0, 10, 25, 41, 60, p.open_angle):
             ps = local_parts(v, angle)
             for name, item in ps.items():
@@ -194,24 +240,28 @@ def integration_sweep(p, q, kind):
                     except AssertionError as e:
                         raise AssertionError((kind, index, angle, name, other, str(e)))
     return {'valve_placements': 5, 'angles_deg': [0, 10, 25, 41, 60, p.open_angle],
-            'all_printed_housings_and_reference_bin_clear': True}
+            'all_printed_housings_purchased_references_and_bin_clear': True}
 
 
 def canonical(p, q, kind, full):
     unique = baseline.canonical(p, full)
     unique = {n: s for n, s in unique.items() if not n.startswith('valve')}
     for n in (80, 120):
-        v = RetainedValve(n, p, kind, q)
+        v = retention_valve(n, p, kind, q)
         for name, item in local_parts(v, 0).items():
             if item.kind != 'print':
                 continue
             s = item.shape
-            if 'magnet_holder' in name or 'magnet_cap' in name:
+            if name.startswith(('closed_magnet_', 'open_magnet_')):
                 phi = v.phi - (p.open_angle if name.startswith('open_') else 0)
                 s = rotate_x(s, -phi, v.pivot)
                 if name.startswith('open_'):
                     s = s.mirror('XY', (0, 0, v.hz))
-            elif name not in ('frame', 'flap'):
+            elif name.startswith('edge_open_cap_'):
+                s = rotate_x(s, p.open_angle, v.pivot)
+            elif name.startswith('edge_open_'):
+                s = s.rotate((0, 0, 0), (1, 0, 0), -90)
+            elif name not in ('frame', 'flap') and not name.startswith(('edge_flap_cap_', 'edge_closed_cap_')):
                 s = s.rotate((0, 0, 0), (0, 1, 0), -90)
             b = s.BoundingBox()
             unique[f'valve{n}_{name}'] = s.translate((-b.xmin, -b.ymin, -b.zmin))
@@ -224,13 +274,13 @@ def boundary_tests(p, q, kind):
         ('small', replace(p, leg_spacing=260, wall=2.8, bridge_depth=148, leg_end_y=207,
                           cassette_height=35, open_angle=78), replace(q, lost_motion_deg=6, magnet_gap=1.2, spring_radius=9,
                           spring_anchor_radius=33, spring_dead_angle=20, spring_free_eye_length=28,
-                          spring_outer_diameter=3)),
+                          spring_outer_diameter=3, edge_magnet_gap=2.8)),
         ('large', replace(p, leg_spacing=300, wall=4, bridge_depth=170, leg_end_y=232,
                           open_angle=83), replace(q, lost_motion_deg=9, magnet_gap=3, spring_anchor_radius=36,
-                                                          spring_dead_angle=30, spring_free_eye_length=33))]:
+                                                          spring_dead_angle=30, spring_free_eye_length=33, edge_magnet_gap=3.6))]:
         pp.validate(); qq.validate(pp)
-        for n in (80, 120):
-            v = RetainedValve(n, pp, kind, qq)
+        for n, role in ((80, 'heater'), (80, 'exhaust'), (120, 'bin')):
+            v = retention_valve(n, pp, kind, qq, role)
             for a in (0, pp.open_angle / 2, pp.open_angle):
                 ps = local_parts(v, a)
                 for item in ps.values():
@@ -241,14 +291,14 @@ def boundary_tests(p, q, kind):
         baseline.overlaps(full)
         cases.append({'case': label, 'brep_valid': True, 'no_printed_collisions': True})
     for bad in (replace(q, lost_motion_deg=0), replace(q, magnet_gap=.5),
-                replace(q, spring_dead_angle=90), replace(q, drive_pin_diameter=2)):
+                replace(q, spring_dead_angle=90), replace(q, drive_pin_diameter=2), replace(q, edge_magnet_gap=1)):
         try:
             bad.validate(p)
         except ValueError:
             pass
         else:
             raise AssertionError('invalid mechanism parameters accepted')
-    return {'valid': cases, 'invalid_cases_rejected': 4}
+    return {'valid': cases, 'invalid_cases_rejected': 5}
 
 
 def package(kind):
@@ -309,18 +359,23 @@ def run():
                       'source_sha256': fingerprints(), 'baseline_parameters': asdict(p), 'retention_parameters': asdict(q),
                       'physical_validation': 'not performed; spring law and magnetic force are design assumptions', 'valves': {}}
             (root / 'verification.json').write_text(json.dumps(report, indent=2))
-            for n in (80, 120):
-                print('MOTION', kind, n, flush=True)
-                v = RetainedValve(n, p, kind, q)
-                report['valves'][str(n)] = check_valve(v)
+            specs = [(80, 'heater', ''), (120, 'bin', '')]
+            if kind == 'magnetic':
+                specs.append((80, 'exhaust', '_exhaust'))
+            for n, role, suffix in specs:
+                print('MOTION', kind, n, role, flush=True)
+                v = retention_valve(n, p, kind, q, role)
+                report['valves'][str(n) + suffix] = check_valve(v)
                 for label, angle in (('closed', 0), ('open', p.open_angle)):
-                    baseline.export_assembly(local_parts(v, angle), f'valve{n}_{label}')
+                    baseline.export_assembly(local_parts(v, angle), f'valve{n}{suffix}_{label}')
             print('INTEGRATION', kind, flush=True)
             report['integration_sweep'] = integration_sweep(p, q, kind)
             report['states'] = {}
             for state in ('dry', 'regenerate', 'cooling'):
                 ps = variant_assembly(p, q, kind, state)
                 result = baseline.overlaps(ps)
+                if kind == 'magnetic':
+                    result['direct_edge_pairs_engaged'] = engaged_edge_pairs(ps, q, state)
                 result['bounds_mm'] = baseline.bounds(cq.Compound.makeCompound([x.shape for x in ps.values()]))
                 result['assembly'] = baseline.export_assembly(ps, state)
                 report['states'][state] = result

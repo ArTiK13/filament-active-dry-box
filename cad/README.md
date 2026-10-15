@@ -110,6 +110,11 @@ make package PYTHON=/Users/xartik/3d_models/.venv/bin/python
 `drybox_cad/retention.py` содержит две независимые версии и общий соосный привод
 со свободным ходом. Настройки — `variants/spring.json` и `variants/magnetic.json`.
 `build_variants.py` проверяет и экспортирует обе версии отдельно от базовой v1.
+`drybox_cad/edge_magnets.py` добавляет непосредственный прижим свободного края
+магнитами и опоры на корпусе. Фабрика `retention_valve(..., role=...)` различает
+120-мм клапан к ящику, 80-мм вход нагревателя и 80-мм выпуск; у выпуска нет
+дополнительного фиксатора открытого положения. В магнитном комплекте изменены
+рамки, створки, крышки каналов и кожух нагревателя; пружинный комплект сохранён.
 Команды: `make variants`, `variants-geometry`, `variants-render`, `variants-package`
 с тем же `PYTHON=...`. Техническое описание — в
 [VALVE_VARIANTS.md](../docs/VALVE_VARIANTS.md).
